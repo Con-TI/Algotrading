@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import statsmodels.api as sm
 
 # stock_codes = ['AALI.JK', 'ABBA.JK', 'ABDA.JK', 'ABMM.JK', 'ACES.JK', 'ACST.JK', 'ADCP.JK', 'ADES.JK', 'ADHI.JK',
 #                'ADMF.JK', 'ADMG.JK', 'ADMR.JK', 'ADRO.JK', 'AEGS.JK', 'AGAR.JK', 'AGII.JK', 'AGRO.JK', 'AGRS.JK',
@@ -155,8 +156,8 @@ percentage_changes_1step = percentage_changes_1step.drop(columns=list_of_flat_st
 corr = percentage_changes_1step.corr(method='pearson')
 corr = corr.dropna(how='all', axis=0)
 corr = corr.dropna(how='all', axis=1)
-up_threshold = 0.7
-low_threshold = -0.7
+up_threshold = 0.4
+low_threshold = -0.4
 pos_corr_pairs = []
 neg_corr_pairs = []
 for i, col1 in enumerate(corr.columns):
@@ -178,15 +179,51 @@ print(len(neg_corr_pairs))
 
 # 4.TODO Plotting pairs without lag
 for pair in pos_corr_pairs:
-    figure,ax1 = plt.subplots(figsize=(10,6))
+    figure = plt.figure(figsize=(10,6))
+    grid = plt.GridSpec(nrows=3,ncols=2)
     series1 = close_prices[pair[0]].reset_index(drop=True)
     series2 = close_prices[pair[1]].reset_index(drop=True)
+    ax1 = figure.add_subplot(grid[0,0])
     ax1.plot(series1.index, series1.values,color='b')
     ax2 = ax1.twinx()
     ax2.plot(series2.index, series2.values, color='r')
-    plt.xlabel('time')
-    plt.ylabel('price')
-    plt.title(f'Blue: {pair[0]}, Red: {pair[1]}, Corr: {pair[2]}')
+    ax1.set_xlabel('time')
+    ax1.set_ylabel(f'price {pair[0]}')
+    ax2.set_ylabel(f'price {pair[1]}')
+    ax1.set_title(f'Blue: {pair[0]}, Red: {pair[1]}, Corr: {pair[2]}')
+    change_since_start_1 = (series1 / series1.iloc[0]) - 1
+    change_since_start_2 = (series2 / series2.iloc[0]) - 1
+    ax3 = figure.add_subplot(grid[1,0])
+    ax3.plot(change_since_start_1.index,change_since_start_1.values,color='b')
+    ax3.plot(change_since_start_2.index,change_since_start_2.values,color='r')
+    ax3.set_xlabel('time')
+    ax3.set_ylabel('Change Since Start')
+    ax3.axhline(0, linestyle='--', color='y')
+    diff_between_series = change_since_start_1-change_since_start_2
+    ax4 = figure.add_subplot(grid[2,0])
+    ax4.plot(diff_between_series.index,diff_between_series.values,color='k')
+    ax4.set_xlabel('time')
+    ax4.set_ylabel('diff_between_stocks')
+    ax4.axhline(0, linestyle='--', color='y')
+
+    ax5 = figure.add_subplot(grid[0,1])
+    X1 = sm.add_constant(series1)
+    model1 = sm.OLS(series2, X1).fit()
+    residuals_series = pd.Series(model1.resid,index=series1.index)
+    ax5.plot(residuals_series.index,residuals_series.values)
+    ax5.set_ylabel('Residuals of Asset Prices')
+
+    ax6 = figure.add_subplot(grid[1,1])
+    log_series_1 = (series1.pct_change())[1:]
+    print(log_series_1)
+    log_series_2 = (series2.pct_change())[1:]
+    X2 = sm.add_constant(log_series_1)
+    model2 = sm.OLS(log_series_2,X2).fit()
+    residuals_series_log = pd.Series(model2.resid,index=change_since_start_1.index)
+    ax6.plot(residuals_series_log.index,residuals_series_log.values)
+    ax6.set_ylabel('Residuals of log prices')
+
+    plt.tight_layout()
     plt.show()
 for pair in neg_corr_pairs:
     figure,ax1 = plt.subplots(figsize=(10,6))
